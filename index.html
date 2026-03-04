@@ -5,7 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Scheda RPG P2P</title>
     <link href="https://fonts.googleapis.com/css2?family=MedievalSharp&display=swap" rel="stylesheet">
-    <!-- Importazione PeerJS per la connessione P2P -->
+    
+    <!-- Libreria PeerJS (versione stabile per GitHub Pages) -->
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     
     <style>
@@ -14,10 +15,9 @@
             --text-color: #2c1a0b;
             --accent-red: #8a1c1c;
             --accent-green: #27ae60;
-            --accent-gold: #c5a00bd7;
+            --host-color: #8e44ad;
             --dark-border: #462c18;
             --input-bg: rgba(255,255,255,0.5);
-            --host-color: #8e44ad;
         }
 
         body {
@@ -99,11 +99,12 @@
         .room-input-container input { margin-bottom: 0; text-align: center; letter-spacing: 2px; font-weight: bold; color: var(--accent-red); text-transform: uppercase;}
         .room-input-container button { width: auto; margin-top: 0; padding: 0 15px; font-size: 1.5rem; flex-shrink: 0;}
 
-        #joinError, #p2pError {
-            color: var(--accent-red); text-align: center; font-weight: bold;
-            margin-bottom: 15px; display: none; background: rgba(255,255,255,0.6);
-            padding: 8px; border-radius: 4px; border: 1px solid var(--accent-red);
+        #statusMsg, #errorMsg {
+            text-align: center; font-weight: bold; margin-bottom: 15px; 
+            padding: 8px; border-radius: 4px; display: none;
         }
+        #errorMsg { color: var(--accent-red); background: rgba(255,255,255,0.8); border: 1px solid var(--accent-red); }
+        #statusMsg { color: #2c3e50; background: rgba(255,255,255,0.6); border: 1px solid #7f8c8d; }
 
         button {
             background-color: var(--text-color); color: #f4e4bc;
@@ -116,6 +117,7 @@
         }
         button:active { transform: scale(0.97); box-shadow: 0 2px 3px rgba(0,0,0,0.3); }
         button:hover { opacity: 0.9; }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
 
         .status-bar {
             position: absolute; top: -35px; right: 0;
@@ -128,6 +130,9 @@
         .dot.online { background: var(--accent-green); box-shadow: 0 0 8px var(--accent-green); }
         .dot.offline { background: #e74c3c; box-shadow: 0 0 8px #e74c3c; }
         .dot.host { background: var(--host-color); box-shadow: 0 0 8px var(--host-color); }
+        .dot.connecting { background: #f39c12; box-shadow: 0 0 8px #f39c12; animation: blink 1s infinite; }
+
+        @keyframes blink { 50% { opacity: 0.4; } }
 
         .name-wrapper { display: inline-block; position: relative; }
         .effect-flame .name-wrapper::before, .effect-flame .name-wrapper::after {
@@ -135,7 +140,6 @@
         }
         .effect-flame .name-wrapper::before { right: 100%; margin-right: 8px; transform: translateY(-50%); }
         .effect-flame .name-wrapper::after { left: 100%; margin-left: 8px; transform: translateY(-50%); }
-        
         @keyframes anim-flame {
             0% { transform: translateY(-40%) scale(0.9); opacity: 0.8; }
             100% { transform: translateY(-60%) scale(1.1); opacity: 1; }
@@ -211,7 +215,7 @@
     
     <div class="status-bar">
         <div id="statusDot" class="dot offline"></div>
-        <span id="statusText">In attesa...</span>
+        <span id="statusText">Disconnesso</span>
     </div>
 
     <!-- PANNELLO SETUP -->
@@ -236,7 +240,7 @@
                 <input type="text" id="inputRoomCreate" readonly>
                 <button onclick="generateRoomCodeUI()" title="Genera nuovo codice">🎲</button>
             </div>
-            <small style="display:block; text-align:center; opacity:0.7; margin-top:-10px; margin-bottom:15px;">Diventerai l'Host. Non chiudere la pagina!</small>
+            <small style="display:block; text-align:center; opacity:0.7; margin-top:-10px; margin-bottom:15px;">Diventerai l'Host. La pagina deve restare aperta.</small>
         </div>
 
         <div id="joinRoomUI" style="display: none;">
@@ -244,10 +248,10 @@
             <input type="text" id="inputRoomJoin" placeholder="Es. A1B2C" style="text-transform: uppercase; text-align: center; font-weight: bold; letter-spacing: 2px; color: var(--accent-red);">
         </div>
 
-        <div id="joinError">Inserisci un codice stanza valido!</div>
-        <div id="p2pError"></div>
+        <div id="statusMsg">Connessione in corso...</div>
+        <div id="errorMsg"></div>
 
-        <button onclick="startGame()">Entra nell'Avventura</button>
+        <button id="btnStart" onclick="startGame()">Entra nell'Avventura</button>
     </div>
 
     <!-- PANNELLO GIOCO -->
@@ -315,18 +319,16 @@
 
 <script>
     // --- VARIABILI GLOBALI P2P ---
-    const P2P_PREFIX = "rpg-p2p-room-"; // Prefisso per evitare collisioni su rete globale
+    const P2P_PREFIX = "rpg-v1-"; // Prefisso per isolare le stanze
     let roomMode = 'create'; 
-    let myUid = crypto.randomUUID(); // ID univoco per questo giocatore
+    let myUid = "user_" + Math.random().toString(36).substr(2, 9); // ID univoco sicuro
     
-    // Variabili PeerJS
     let peer = null;
     let isHost = false;
-    let hostConnection = null; // Usato se sono Client
-    let clientConnections = []; // Usato se sono Host
+    let hostConnection = null; 
+    let clientConnections = []; 
     
-    // Stato condiviso
-    let partyMembers = {}; // Mappa { uid: characterData }
+    let partyMembers = {}; 
 
     let charData = {
         name: "Valeros",
@@ -345,8 +347,7 @@
     // --- SETUP UI ---
     function toggleRoomMode(mode) {
         roomMode = mode;
-        document.getElementById('joinError').style.display = 'none'; 
-        document.getElementById('p2pError').style.display = 'none';
+        hideMessages();
         
         if (mode === 'create') {
             document.getElementById('btnCreateMode').classList.add('active');
@@ -376,9 +377,32 @@
         generateRoomCodeUI();
     });
 
+    function showStatus(msg) {
+        const el = document.getElementById('statusMsg');
+        el.innerText = msg;
+        el.style.display = 'block';
+        document.getElementById('errorMsg').style.display = 'none';
+    }
+
+    function showError(msg) {
+        const el = document.getElementById('errorMsg');
+        el.innerText = msg;
+        el.style.display = 'block';
+        document.getElementById('statusMsg').style.display = 'none';
+        document.getElementById('btnStart').disabled = false;
+        updateTopStatus("offline", "Errore");
+    }
+
+    function hideMessages() {
+        document.getElementById('errorMsg').style.display = 'none';
+        document.getElementById('statusMsg').style.display = 'none';
+    }
+
     // --- AVVIO CONNESSIONE P2P ---
     function startGame() {
-        charData.name = document.getElementById('inputName').value.trim() || "Eroe Senza Nome";
+        hideMessages();
+        
+        charData.name = document.getElementById('inputName').value.trim() || "Eroe";
         charData.class = document.getElementById('inputClass').value.trim() || "Avventuriero";
         
         let roomCode = "";
@@ -387,75 +411,89 @@
         } else {
             roomCode = document.getElementById('inputRoomJoin').value.trim().toUpperCase();
             if (!roomCode || roomCode.length < 2) {
-                document.getElementById('joinError').style.display = 'block';
+                showError("Inserisci un codice stanza valido!");
                 return;
             }
         }
         charData.room = roomCode;
 
+        document.getElementById('btnStart').disabled = true;
         initP2P();
     }
 
     function initP2P() {
-        updateStatus("wait", "Connessione...");
+        showStatus("Connessione al server P2P in corso...");
+        updateTopStatus("connecting", "Connessione...");
         
+        const peerId = isHost ? (P2P_PREFIX + charData.room) : myUid;
+        
+        // Opzioni ottimizzate per GitHub Pages (HTTPS/Secure)
+        const peerOptions = {
+            secure: true,
+            debug: 2 // Log utili per debuggare
+        };
+
         if (roomMode === 'create') {
             isHost = true;
-            // Creo l'host con un ID specifico basato sulla stanza
-            peer = new Peer(P2P_PREFIX + charData.room);
+            peer = new Peer(P2P_PREFIX + charData.room, peerOptions);
             
             peer.on('open', (id) => {
                 enterGameUI();
-                updateStatus("host", "Host P2P Attivo");
-                partyMembers[myUid] = charData; // Aggiungo me stesso al party
+                updateTopStatus("host", "Host Attivo");
+                partyMembers[myUid] = charData;
                 broadcastParty();
             });
 
-            // L'Host riceve le connessioni dai client
             peer.on('connection', (conn) => {
                 clientConnections.push(conn);
-                let clientUid = null; // Sarà impostato dal primo messaggio
+                let clientUid = null;
                 
+                conn.on('open', () => {
+                    // Invia subito lo stato del party al nuovo arrivato
+                    conn.send({ type: 'party_update', party: partyMembers });
+                });
+
                 conn.on('data', (data) => {
                     if (data.type === 'update') {
                         clientUid = data.uid;
-                        partyMembers[clientUid] = data.charData; // Aggiorno stato in memoria dell'Host
-                        broadcastParty(); // Invia il party aggiornato a TUTTI
-                        renderParty(); // Aggiorna l'UI dell'Host
+                        partyMembers[clientUid] = data.charData;
+                        broadcastParty(); 
+                        renderParty(); 
                     }
                 });
 
                 conn.on('close', () => {
                     if(clientUid && partyMembers[clientUid]) {
-                        delete partyMembers[clientUid]; // Rimuovi il giocatore
-                        broadcastParty(); // Avvisa gli altri
+                        delete partyMembers[clientUid];
+                        broadcastParty();
                         renderParty();
                     }
                     clientConnections = clientConnections.filter(c => c !== conn);
                 });
             });
 
-            peer.on('error', (err) => {
-                showError("Errore Host: Il codice stanza potrebbe essere già in uso.");
-                console.error(err);
-            });
-
         } else {
-            // Sono un CLIENT
             isHost = false;
-            peer = new Peer(); // ID casuale per il client
+            peer = new Peer(peerOptions); 
             
             peer.on('open', (id) => {
-                // Mi connetto all'ID dell'Host
-                hostConnection = peer.connect(P2P_PREFIX + charData.room);
+                showStatus("Ricerca stanza dell'Host in corso...");
+                
+                // Tenta la connessione all'Host
+                hostConnection = peer.connect(P2P_PREFIX + charData.room, { reliable: true });
                 
                 hostConnection.on('open', () => {
                     enterGameUI();
-                    updateStatus("online", "Connesso all'Host");
-                    sync(); // Invia subito i miei dati all'host
+                    updateTopStatus("online", "Connesso");
+                    
+                    // Appena connesso, invia immediatamente i propri dati
+                    hostConnection.send({
+                        type: 'update',
+                        uid: myUid,
+                        charData: charData
+                    });
                 });
 
-                // Ricevo gli aggiornamenti globali dall'Host
                 hostConnection.on('data', (data) => {
                     if (data.type === 'party_update') {
                         partyMembers = data.party;
@@ -464,23 +502,33 @@
                 });
 
                 hostConnection.on('close', () => {
-                    updateStatus("offline", "Host Disconnesso");
-                    log("La connessione con l'Host è caduta!");
+                    updateTopStatus("offline", "Host Disconnesso");
+                    log("L'Host ha chiuso la stanza!");
+                    document.getElementById('partyListContainer').innerHTML = "<div style='color:red; text-align:center;'>La connessione con l'Host è caduta.</div>";
                 });
             });
-
-            peer.on('error', (err) => {
-                showError("Impossibile connettersi. L'Host è attivo?");
-                console.error(err);
-            });
         }
-    }
 
-    function showError(msg) {
-        updateStatus("offline", "Errore");
-        const errEl = document.getElementById('p2pError');
-        errEl.innerText = msg;
-        errEl.style.display = 'block';
+        // --- GESTIONE ERRORI COMUNE ---
+        peer.on('error', (err) => {
+            console.error("PeerJS Error:", err.type, err);
+            
+            if (err.type === 'unavailable-id') {
+                showError("Questo codice stanza è già in uso. Creane un altro.");
+            } else if (err.type === 'peer-unavailable') {
+                showError("Stanza non trovata. L'Host è offline o il codice è errato.");
+            } else if (err.type === 'network' || err.type === 'server-error') {
+                showError("Errore di rete col server. Riprova.");
+            } else {
+                showError("Errore di connessione: " + err.type);
+            }
+        });
+
+        // Riconnessione automatica al server di segnalazione (se cade la rete)
+        peer.on('disconnected', () => {
+            console.log("Disconnesso dal server PeerJS. Tentativo di riconnessione...");
+            peer.reconnect();
+        });
     }
 
     function enterGameUI() {
@@ -520,7 +568,6 @@
         }
     }
 
-    // Usata solo dall'Host per inviare i dati a tutti
     function broadcastParty() {
         if (!isHost) return;
         clientConnections.forEach(conn => {
@@ -551,7 +598,7 @@
             log("Livello perso...");
         }
         render();
-        sync(); // Notifica P2P
+        sync(); 
     }
 
     function updateHP(delta) {
@@ -563,7 +610,7 @@
         else if (delta > 0) log(`Ti sei curato di ${delta} HP.`);
 
         render();
-        sync(); // Notifica P2P
+        sync();
     }
 
     function log(msg) {
@@ -598,14 +645,13 @@
         else bar.style.backgroundColor = "#27ae60"; 
     }
 
-    // Disegna la lista dei compagni di squadra (escludendo se stessi)
     function renderParty() {
         const list = document.getElementById('partyListContainer');
         list.innerHTML = "";
         let count = 0;
         
         Object.keys(partyMembers).forEach(uid => {
-            if (uid === myUid) return; // Salta te stesso
+            if (uid === myUid) return; // Non stampare se stesso
 
             const p = partyMembers[uid];
             const pDiv = document.createElement('div');
@@ -629,14 +675,15 @@
         if(count === 0) list.innerHTML = "<div style='text-align:center; opacity:0.5; font-size:0.9rem; margin-top:10px;'>In attesa di altri giocatori...</div>";
     }
 
-    function updateStatus(state, msg) {
+    function updateTopStatus(state, msg) {
         const dot = document.getElementById('statusDot');
         const txt = document.getElementById('statusText');
-        dot.className = "dot"; // reset
+        dot.className = "dot"; 
         
         if (state === "host") dot.classList.add("host");
         else if (state === "online") dot.classList.add("online");
         else if (state === "offline") dot.classList.add("offline");
+        else if (state === "connecting") dot.classList.add("connecting");
         
         txt.innerText = msg;
     }
