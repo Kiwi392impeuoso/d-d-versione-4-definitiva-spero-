@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scheda RPG Cloud</title>
+    <link href="https://fonts.googleapis.com/css2?family=MedievalSharp&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            --bg-paper: rgba(244, 228, 188, 0.92); /* Leggermente traslucido per mostrare lo sfondo */
+            --text-color: #2c1a0b;
+            --accent-red: #8a1c1c;
+            --accent-green: #27ae60;
+            --accent-gold: #c5a00bd7;
+            --dark-border: #462c18;
+            --input-bg: rgba(255,255,255,0.5);
+        }
+
+        body {
+            margin: 0;
+            font-family: 'MedievalSharp', cursive;
+            padding: 10px;
+            color: var(--text-color);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* --- SFONDO STILIZZATO E SFOCATO --- */
+        .bg-landscape {
+            position: fixed;
+            top: -5%; left: -5%; right: -5%; bottom: -5%;
+            background-image: url('https://images.unsplash.com/photo-1518709268805-4e9042af9f23?q=80&w=2000&auto=format&fit=crop');
+            background-size: cover;
+            background-position: center;
+            filter: blur(12px) brightness(0.35) saturate(1.2) contrast(1.1);
+            z-index: -1;
+            pointer-events: none;
+        }
+
+        .app-container {
+            width: 100%;
+            max-width: 500px;
+            position: relative;
+            z-index: 1;
+        }
+
+        /* --- STILE PERGAMENA --- */
+        .paper-panel {
+            background-color: var(--bg-paper);
+            padding: 30px;
+            border-radius: 5px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.8), inset 0 0 60px rgba(0,0,0,0.1);
+            border: 8px solid var(--dark-border);
+            position: relative;
+            margin-bottom: 20px;
+            display: none;
+            backdrop-filter: blur(4px); /* Aggiunge un tocco di sfocatura interna */
+            animation: fadeIn 0.4s ease-out;
+        }
+        .paper-panel.active { display: block; }
+
+        @keyframes fadeIn { 
+            from { opacity: 0; transform: translateY(15px); } 
+            to { opacity: 1; transform: translateY(0); } 
+        }
+
+        h1 { 
+            text-align: center; 
+            color: var(--text-color); 
+            border-bottom: 2px solid var(--text-color); 
+            margin-top: 0; 
+            padding-bottom: 10px;
+        }
+
+        /* --- UI SETUP --- */
+        label { display: block; margin-bottom: 5px; font-weight: bold; font-size: 1rem; }
+
+        input {
+            width: 100%; padding: 10px; margin-bottom: 15px;
+            background: var(--input-bg); border: 2px solid var(--dark-border);
+            font-family: inherit; font-size: 1.1rem; box-sizing: border-box;
+            color: var(--text-color); border-radius: 4px;
+            transition: border-color 0.3s, background 0.3s;
+        }
+        input:focus { outline: none; border-color: var(--accent-red); background: rgba(255,255,255,0.8); }
+
+        .room-input-container {
+            display: flex; gap: 5px; margin-bottom: 15px;
+        }
+        .room-input-container input { margin-bottom: 0; text-align: center; letter-spacing: 2px; font-weight: bold; color: var(--accent-red); text-transform: uppercase;}
+        .room-input-container button { width: auto; margin-top: 0; padding: 0 15px; font-size: 1.5rem; }
+
+        button {
+            background-color: var(--text-color); color: #f4e4bc;
+            border: none; padding: 12px; width: 100%;
+            font-family: inherit; cursor: pointer; font-size: 1.1rem;
+            margin-top: 10px; border-radius: 5px;
+            transition: transform 0.1s, opacity 0.2s, box-shadow 0.2s;
+            text-transform: uppercase; letter-spacing: 1px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        }
+        button:active { transform: scale(0.97); box-shadow: 0 2px 3px rgba(0,0,0,0.3); }
+        button:hover { opacity: 0.9; }
+
+        /* --- STATUS BAR --- */
+        .status-bar {
+            position: absolute; top: -35px; right: 0;
+            font-size: 0.8rem; display: flex; align-items: center; gap: 8px;
+            background: rgba(0,0,0,0.8); padding: 6px 12px;
+            border-radius: 15px; color: #eee; font-family: sans-serif;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.5);
+        }
+        .dot { width: 10px; height: 10px; border-radius: 50%; background: #ccc; transition: background 0.3s; }
+        .dot.online { background: var(--accent-green); box-shadow: 0 0 8px var(--accent-green); }
+        .dot.offline { background: #e74c3c; box-shadow: 0 0 8px #e74c3c; }
+
+        /* --- ANIMAZIONI NOMI (FUOCO, RAGGI, FULMINI) --- */
+        .name-wrapper {
+            display: inline-block;
+            position: relative;
+        }
+
+        /* Effetto 1: Fuoco */
+        .effect-flame .name-wrapper::before, .effect-flame .name-wrapper::after {
+            content: '🔥'; position: absolute; top: 50%;
+            animation: anim-flame 0.8s infinite alternate ease-in-out;
+            filter: drop-shadow(0 0 8px #e74c3c);
+        }
+        .effect-flame .name-wrapper::before { right: 100%; margin-right: 8px; transform: translateY(-50%); }
+        .effect-flame .name-wrapper::after { left: 100%; margin-left: 8px; transform: translateY(-50%); }
+
+        /* Effetto 2: Raggi Viola */
+        .effect-ray .name-wrapper::before, .effect-ray .name-wrapper::after {
+            content: '✺'; position: absolute; top: 50%; color: #9b59b6;
+            animation: anim-ray 3s infinite linear;
+            text-shadow: 0 0 10px #8e44ad, 0 0 20px #8e44ad; font-family: sans-serif;
+        }
+        .effect-ray .name-wrapper::before { right: 100%; margin-right: 8px; margin-top: -12px;}
+        .effect-ray .name-wrapper::after { left: 100%; margin-left: 8px; margin-top: -12px; }
+
+        /* Effetto 3: Fulmini */
+        .effect-lightning .name-wrapper::before, .effect-lightning .name-wrapper::after {
+            content: '⚡'; position: absolute; top: 50%;
+            animation: anim-lightning 1.5s infinite;
+            filter: drop-shadow(0 0 5px #3498db);
+        }
+        .effect-lightning .name-wrapper::before { right: 100%; margin-right: 8px; transform: translateY(-50%); }
+        .effect-lightning .name-wrapper::after { left: 100%; margin-left: 8px; transform: translateY(-50%); }
+
+        @keyframes anim-flame {
+            0% { transform: translateY(-40%) scale(0.9); opacity: 0.8; }
+            100% { transform: translateY(-60%) scale(1.1); opacity: 1; }
+        }
+        @keyframes anim-ray {
+            0% { transform: rotate(0deg) scale(0.9); }
+            50% { transform: rotate(180deg) scale(1.3); }
+            100% { transform: rotate(360deg) scale(0.9); }
+        }
+        @keyframes anim-lightning {
+            0%, 85% { opacity: 0.7; transform: translateY(-50%) scale(0.9); filter: drop-shadow(0 0 2px #3498db); }
+            87%, 93% { opacity: 1; transform: translateY(-50%) scale(1.3); filter: drop-shadow(0 0 15px #fff); }
+            89%, 95% { opacity: 0; }
+        }
+
+        /* --- GAME UI --- */
+        .avatar { text-align: center; font-size: 1.2rem; margin-bottom: 20px; color: #555; font-style: italic; }
+
+        .stats-grid { 
+            display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; 
+            margin-bottom: 20px; text-align: center; 
+        }
+        .stat-box { 
+            border: 2px solid var(--text-color); padding: 10px; 
+            border-radius: 8px; background: rgba(255,255,255,0.4); 
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .stat-value { font-size: 1.6rem; font-weight: bold; }
+        .stat-label { font-size: 0.75rem; text-transform: uppercase; font-weight: bold; }
+
+        .level-section {
+            display: flex; justify-content: space-between; align-items: center;
+            background: rgba(0,0,0,0.08); padding: 10px 15px;
+            border-radius: 5px; margin-bottom: 20px; border: 1px dashed var(--dark-border);
+        }
+        .btn-small { width: auto; padding: 5px 15px; margin: 0; font-size: 1.2rem; }
+
+        /* HP Bar */
+        .hp-container { margin-bottom: 20px; }
+        .hp-header { display: flex; justify-content: space-between; margin-bottom: 5px; font-size: 1rem; font-weight: bold; }
+        .hp-bar-bg {
+            background-color: #4a4a4a; height: 30px; border-radius: 15px;
+            overflow: hidden; border: 2px solid var(--text-color);
+            position: relative; box-shadow: inset 0 3px 6px rgba(0,0,0,0.5);
+        }
+        .hp-bar-fill {
+            background-color: var(--accent-red); height: 100%; width: 100%;
+            transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.4s;
+        }
+
+        /* Controls */
+        .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        button.heal { background-color: #27ae60; color: white; border: 2px solid #1e8449; }
+        button.damage { background-color: #c0392b; color: white; border: 2px solid #922b21; }
+
+        /* Party List */
+        .party-list { margin-top: 25px; border-top: 2px dashed var(--dark-border); padding-top: 15px; }
+        .party-title { text-align: center; font-size: 1rem; font-weight: bold; opacity: 0.8; margin-bottom: 15px; text-transform: uppercase; }
+        .party-member { 
+            padding: 12px; border-bottom: 1px solid rgba(70, 44, 24, 0.2); 
+            display: flex; justify-content: space-between; font-size: 1rem;
+            align-items: center; background: rgba(255,255,255,0.3);
+            border-radius: 6px; margin-bottom: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        
+        /* Modifica specifica per i nomi della party list */
+        .party-member-name { text-align: center; width: 100%; padding-left: 20px;}
+        .party-member-stats { text-align: right; min-width: 60px; }
+
+        .config-warning {
+            background: #f1c40f; color: #4a3b10; padding: 10px;
+            font-size: 0.9rem; text-align: center; border: 2px solid #d35400;
+            margin-bottom: 15px; display: none; border-radius: 4px; font-family: sans-serif;
+        }
+        
+        #logMsg { 
+            text-align: center; font-size: 1rem; margin-top: 15px; 
+            opacity: 0.7; font-style: italic; min-height: 1.2em;
+            transition: opacity 0.3s;
+        }
+
+        .room-badge {
+            text-align:center; font-size:0.85rem; margin-bottom:15px; 
+            opacity:0.9; letter-spacing:2px; font-weight: bold;
+            background: rgba(0,0,0,0.15); padding: 8px; border-radius: 6px;
+            border: 1px solid rgba(0,0,0,0.2);
+        }
+
+    </style>
+</head>
+<body>
+
+<!-- Livello Sfondo -->
+<div class="bg-landscape"></div>
+
+<div class="app-container">
+    
+    <!-- STATUS INDICATOR -->
+    <div class="status-bar">
+        <div id="statusDot" class="dot"></div>
+        <span id="statusText">Inizializzazione...</span>
+    </div>
+
+    <!-- PANNELLO SETUP -->
+    <div id="setupPanel" class="paper-panel active">
+        <h1>Nuovo Eroe</h1>
+        
+        <div id="configWarning" class="config-warning">
+            <strong>MODALITÀ OFFLINE</strong><br>
+            Nessun cloud rilevato. Gioco in locale.
+        </div>
+
+        <label>Nome Eroe</label>
+        <input type="text" id="inputName" value="Valeros" placeholder="Es. Gandalf">
+        
+        <label>Classe & Razza</label>
+        <input type="text" id="inputClass" value="Guerriero Umano" placeholder="Es. Elfo Mago">
+        
+        <label>Codice Stanza (Multiplayer)</label>
+        <div class="room-input-container">
+            <input type="text" id="inputRoom" placeholder="Es. TAVERNA">
+            <button onclick="generateRoomCodeUI()" title="Genera nuovo codice">🎲</button>
+        </div>
+
+        <button onclick="startGame()">Entra nell'Avventura</button>
+    </div>
+
+    <!-- PANNELLO GIOCO -->
+    <div id="gamePanel" class="paper-panel">
+        
+        <div class="room-badge" id="roomDisplay">STANZA: ???</div>
+
+        <!-- Nome con contenitore per l'animazione -->
+        <h1 style="border:none; margin-bottom: 0;" id="charEffectContainer">
+            <span class="name-wrapper" id="charNameDisplay">Nome Personaggio</span>
+        </h1>
+        <div class="avatar" id="charClassDisplay">Classe Razza</div>
+
+        <div class="stats-grid">
+            <div class="stat-box">
+                <div class="stat-value" id="dispStr">10</div>
+                <div class="stat-label">Forza (STR)</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-value" id="dispDmg">10</div>
+                <div class="stat-label">Danni Base</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-value" id="dispAc">10</div>
+                <div class="stat-label">Armatura (AC)</div>
+            </div>
+        </div>
+
+        <div class="level-section">
+            <span style="font-weight:bold;">LIVELLO <span id="dispLvl" style="font-size:1.6rem; margin-left:5px; color: var(--accent-red);">1</span></span>
+            <div>
+                <button class="btn-small" onclick="changeLevel(-1)">-</button>
+                <button class="btn-small" onclick="changeLevel(1)">+</button>
+            </div>
+        </div>
+
+        <div class="hp-container">
+            <div class="hp-header">
+                <span>Punti Ferita</span>
+                <span><span id="dispHp">20</span> / <span id="dispMaxHp">20</span></span>
+            </div>
+            <div class="hp-bar-bg">
+                <div class="hp-bar-fill" id="hpBar"></div>
+            </div>
+        </div>
+
+        <div class="controls">
+            <button class="damage" onclick="updateHP(-5)">Danni (-5)</button>
+            <button class="heal" onclick="updateHP(5)">Cura (+5)</button>
+        </div>
+        
+        <p id="logMsg">Benvenuto nel regno.</p>
+
+        <!-- Sezione Multiplayer (Cloud) -->
+        <div class="party-list">
+            <div class="party-title">Compagni nella Stanza</div>
+            <div id="partyListContainer">
+                <div style="text-align:center; opacity:0.5; font-size:0.9rem; margin-top:10px;">Nessuno qui...</div>
+            </div>
+        </div>
+
+        <button onclick="location.reload()" style="background:transparent; color:#5d4037; border:2px solid #5d4037; margin-top:30px; font-size:0.9rem; box-shadow: none;">Esci dalla partita</button>
+    </div>
+
+</div>
+
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+    import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    import { getFirestore, doc, setDoc, onSnapshot, collection } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+    // --- VARIABILI GLOBALI ---
+    let app, auth, db;
+    let isOnline = false;
+    let currentUser = null;
+    let myDocRef = null;
+    let unsubscribeParty = null;
+    let fallbackUid = "local_" + Math.floor(Math.random() * 100000);
+    
+    // Configurazione iniettata dall'ambiente (se presente)
+    let activeConfig = null;
+    let appIdStr = 'default-app-id';
+
+    if (typeof __firebase_config !== 'undefined') {
+        try {
+            activeConfig = JSON.parse(__firebase_config);
+            if (typeof __app_id !== 'undefined') appIdStr = __app_id;
+        } catch (e) { console.error("Errore parsing configurazione Firebase", e); }
+    }
+
+    // --- GENERAZIONE CODICE STANZA AUTOMATICO ---
+    function generateRandomCode() {
+        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+        let code = '';
+        for (let i = 0; i < 5; i++) code += chars.charAt(Math.floor(Math.random() * chars.length));
+        return code;
+    }
+
+    window.generateRoomCodeUI = function() {
+        document.getElementById('inputRoom').value = generateRandomCode();
+    };
+
+    // Pre-compila la stanza al caricamento
+    document.addEventListener("DOMContentLoaded", () => {
+        document.getElementById('inputRoom').value = generateRandomCode();
+    });
+
+    // --- INIZIALIZZAZIONE FIREBASE ---
+    if (activeConfig) {
+        try {
+            app = initializeApp(activeConfig);
+            auth = getAuth(app);
+            db = getFirestore(app);
+            isOnline = true;
+            
+            const initAuth = async () => {
+                try {
+                    if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                        await signInWithCustomToken(auth, __initial_auth_token);
+                    } else {
+                        await signInAnonymously(auth);
+                    }
+                } catch(err) {
+                    console.error("Auth Error:", err);
+                    updateStatus(false, "Errore Auth");
+                }
+            };
+            
+            initAuth();
+            
+            onAuthStateChanged(auth, user => {
+                if(user) {
+                    currentUser = user;
+                    updateStatus(true, "Cloud Attivo");
+                    if (document.getElementById('gamePanel').classList.contains('active')) {
+                        joinRoom(charData.room);
+                    }
+                } else {
+                    updateStatus(false, "Disconnesso");
+                }
+            });
+        } catch (e) {
+            console.error("Firebase init failed:", e);
+            updateStatus(false, "Errore Inizializzazione");
+            document.getElementById('configWarning').style.display = 'block';
+        }
+    } else {
+        document.getElementById('configWarning').style.display = 'block';
+        updateStatus(false, "Offline");
+    }
+
+    // --- STATO DEL PERSONAGGIO ---
+    let charData = {
+        name: "Valeros",
+        class: "Guerriero",
+        room: "",
+        level: 1,
+        maxHp: 20,
+        currentHp: 20,
+        str: 10,
+        baseDmg: 10,
+        baseAc: 10
+    };
+
+    let logTimeout;
+
+    // --- FUNZIONE ASSEGNAZIONE EFFETTI (Basata su UID) ---
+    function getEffectClass(uid) {
+        let sum = 0;
+        for(let i=0; i<uid.length; i++) sum += uid.charCodeAt(i);
+        const effects = ['effect-flame', 'effect-ray', 'effect-lightning'];
+        return effects[sum % effects.length];
+    }
+
+    function getMyUid() {
+        return currentUser ? currentUser.uid : fallbackUid;
+    }
+
+    // --- UI FUNCTIONS ---
+    window.startGame = function() {
+        if (isOnline && !currentUser) {
+            log("Connessione al Cloud in corso...");
+            setTimeout(() => {
+                if(!currentUser) {
+                    log("Avvio in locale...");
+                    proceedStart();
+                } else {
+                    proceedStart();
+                }
+            }, 1000);
+            return;
+        }
+        proceedStart();
+    };
+
+    function proceedStart() {
+        // Preleva dati dal setup
+        charData.name = document.getElementById('inputName').value.trim() || "Eroe Senza Nome";
+        charData.class = document.getElementById('inputClass').value.trim() || "Avventuriero";
+        let roomVal = document.getElementById('inputRoom').value.trim();
+        if(!roomVal) roomVal = generateRandomCode(); // Sicurezza se utente cancella tutto
+        charData.room = roomVal.toUpperCase();
+
+        // Switch pannelli
+        document.getElementById('setupPanel').classList.remove('active');
+        document.getElementById('gamePanel').classList.add('active');
+        
+        // Imposta UI statica e Animazioni Base
+        document.getElementById('charNameDisplay').innerText = charData.name;
+        document.getElementById('charClassDisplay').innerText = charData.class;
+        document.getElementById('roomDisplay').innerText = "📍 STANZA: " + charData.room;
+
+        // Applica animazione personale
+        const myEffect = getEffectClass(getMyUid());
+        document.getElementById('charEffectContainer').className = myEffect;
+
+        render();
+
+        if (isOnline && currentUser) {
+            joinRoom(charData.room);
+        }
+    }
+
+    // --- LOGICA DI GIOCO ---
+    window.changeLevel = function(delta) {
+        const oldLvl = charData.level;
+        charData.level += delta;
+        if(charData.level < 1) charData.level = 1;
+
+        if(charData.level > oldLvl) { 
+            charData.maxHp += 8;
+            charData.currentHp += 8;
+            if(charData.level % 4 === 0) charData.str += 1;
+            log("LEVEL UP! Sei diventato più forte.");
+        } else if (charData.level < oldLvl) { 
+            charData.maxHp -= 8;
+            if(charData.currentHp > charData.maxHp) charData.currentHp = charData.maxHp;
+            if(oldLvl % 4 === 0) charData.str -= 1;
+            log("Livello perso...");
+        }
+        render();
+        sync();
+    }
+
+    window.updateHP = function(delta) {
+        charData.currentHp += delta;
+        if(charData.currentHp > charData.maxHp) charData.currentHp = charData.maxHp;
+        if(charData.currentHp < 0) charData.currentHp = 0;
+        
+        if (delta < 0) log(`Hai subito ${Math.abs(delta)} danni!`);
+        else if (delta > 0) log(`Ti sei curato di ${delta} HP.`);
+
+        render();
+        sync();
+    }
+
+    function log(msg) {
+        const elLog = document.getElementById('logMsg');
+        elLog.innerText = msg;
+        elLog.style.opacity = 1;
+        clearTimeout(logTimeout);
+        logTimeout = setTimeout(() => { elLog.style.opacity = 0.5; }, 2500);
+    }
+
+    function render() {
+        // Calcolo stats derivate
+        let strMod = Math.floor((charData.str - 10) / 2);
+        let dmg = charData.baseDmg + strMod + Math.floor(charData.level / 2);
+        let ac = charData.baseAc + Math.floor(charData.level / 2);
+
+        // Update DOM testuale
+        document.getElementById('dispLvl').innerText = charData.level;
+        document.getElementById('dispStr').innerText = charData.str;
+        document.getElementById('dispDmg').innerText = dmg;
+        document.getElementById('dispAc').innerText = ac;
+        
+        document.getElementById('dispHp').innerText = charData.currentHp;
+        document.getElementById('dispMaxHp').innerText = charData.maxHp;
+
+        // Barra HP
+        let pct = (charData.currentHp / charData.maxHp) * 100;
+        pct = Math.max(0, Math.min(100, pct)); 
+        
+        const bar = document.getElementById('hpBar');
+        bar.style.width = pct + "%";
+        
+        if(pct <= 25) bar.style.backgroundColor = "#c0392b"; // Rosso critico
+        else if (pct <= 50) bar.style.backgroundColor = "#d35400"; // Arancione
+        else bar.style.backgroundColor = "#27ae60"; // Verde sano
+    }
+
+    // --- FIREBASE SYNC ---
+    async function joinRoom(room) {
+        if(!isOnline || !currentUser) return;
+
+        const collectionPath = collection(db, 'artifacts', appIdStr, 'public', 'data', 'rpg_players');
+        const docId = currentUser.uid;
+        myDocRef = doc(db, 'artifacts', appIdStr, 'public', 'data', 'rpg_players', docId);
+        
+        await sync();
+
+        if (unsubscribeParty) unsubscribeParty();
+
+        // Ascolto e rendering del gruppo
+        unsubscribeParty = onSnapshot(collectionPath, (snapshot) => {
+            const list = document.getElementById('partyListContainer');
+            list.innerHTML = "";
+            let count = 0;
+            
+            snapshot.forEach(d => {
+                const p = d.data();
+                if(p.room === room && d.id !== docId) { 
+                    const pDiv = document.createElement('div');
+                    const memberEffect = getEffectClass(p.uid || d.id);
+                    pDiv.className = `party-member ${memberEffect}`;
+                    
+                    const hpPct = (p.currentHp / p.maxHp);
+                    const hpColor = hpPct < 0.3 ? '#c0392b' : (hpPct < 0.6 ? '#d35400' : '#27ae60');
+
+                    pDiv.innerHTML = `
+                        <div class="party-member-name">
+                            <span class="name-wrapper"><strong>${p.name}</strong></span> <span style="font-size:0.8rem; opacity:0.8;">(Lvl ${p.level})</span>
+                        </div>
+                        <div class="party-member-stats" style="color:${hpColor}; font-weight:bold; background: rgba(0,0,0,0.6); padding: 4px 10px; border-radius: 12px; margin-left: 10px;">
+                            ${p.currentHp}/${p.maxHp}
+                        </div>`;
+                    list.appendChild(pDiv);
+                    count++;
+                }
+            });
+            if(count === 0) list.innerHTML = "<div style='text-align:center; opacity:0.5; font-size:0.9rem; margin-top:10px;'>Nessun alleato in vista...</div>";
+        }, (err) => {
+            console.error("Errore Sync Party:", err);
+        });
+    }
+
+    async function sync() {
+        if(!isOnline || !myDocRef) return;
+        try {
+            await setDoc(myDocRef, {
+                uid: currentUser.uid,
+                room: charData.room,
+                name: charData.name,
+                class: charData.class,
+                level: charData.level,
+                currentHp: charData.currentHp,
+                maxHp: charData.maxHp,
+                str: charData.str,
+                lastUpdate: Date.now()
+            }, { merge: true });
+        } catch(e) { console.error("Sync error", e); }
+    }
+
+    function updateStatus(online, msg) {
+        const dot = document.getElementById('statusDot');
+        const txt = document.getElementById('statusText');
+        if(online) {
+            dot.className = "dot online";
+            txt.innerText = msg || "Online";
+        } else {
+            dot.className = "dot offline";
+            txt.innerText = msg || "Offline";
+        }
+    }
+</script>
+</body>
+</html>
