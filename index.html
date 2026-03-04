@@ -386,7 +386,7 @@
 
     function showError(msg) {
         const el = document.getElementById('errorMsg');
-        el.innerText = msg;
+        el.innerHTML = msg + "<br><small style='opacity:0.8; margin-top:5px; display:block;'>Se il problema persiste, ricarica la pagina.</small>";
         el.style.display = 'block';
         document.getElementById('statusMsg').style.display = 'none';
         document.getElementById('btnStart').disabled = false;
@@ -407,7 +407,7 @@
         
         let roomCode = "";
         if (roomMode === 'create') {
-            roomCode = document.getElementById('inputRoomCreate').value.trim();
+            roomCode = document.getElementById('inputRoomCreate').value.trim().toUpperCase();
         } else {
             roomCode = document.getElementById('inputRoomJoin').value.trim().toUpperCase();
             if (!roomCode || roomCode.length < 2) {
@@ -425,17 +425,21 @@
         showStatus("Connessione al server P2P in corso...");
         updateTopStatus("connecting", "Connessione...");
         
+        // FIX CRITICO: Distrugge qualsiasi istanza PeerJS precedente per evitare conflitti
+        if (peer) {
+            peer.destroy();
+            peer = null;
+        }
+        hostConnection = null;
+        clientConnections = [];
+        partyMembers = {};
+
         const peerId = isHost ? (P2P_PREFIX + charData.room) : myUid;
         
-        // Opzioni ottimizzate per GitHub Pages (HTTPS/Secure)
-        const peerOptions = {
-            secure: true,
-            debug: 2 // Log utili per debuggare
-        };
-
+        // Uso le impostazioni di default di PeerJS che sono molto più stabili e tolleranti alle reti
         if (roomMode === 'create') {
             isHost = true;
-            peer = new Peer(P2P_PREFIX + charData.room, peerOptions);
+            peer = new Peer(peerId); // Creazione come Host
             
             peer.on('open', (id) => {
                 enterGameUI();
@@ -474,7 +478,7 @@
 
         } else {
             isHost = false;
-            peer = new Peer(peerOptions); 
+            peer = new Peer(); // Creazione come Client
             
             peer.on('open', (id) => {
                 showStatus("Ricerca stanza dell'Host in corso...");
@@ -482,7 +486,16 @@
                 // Tenta la connessione all'Host
                 hostConnection = peer.connect(P2P_PREFIX + charData.room, { reliable: true });
                 
+                // Timeout manuale di sicurezza nel caso in cui PeerJS si blocchi
+                let connTimeout = setTimeout(() => {
+                    if (!hostConnection || !hostConnection.open) {
+                        showError("Tempo scaduto. Controlla che il codice sia esatto e che l'Host sia già dentro la stanza.");
+                        if(peer) peer.destroy();
+                    }
+                }, 8000); // 8 secondi di attesa
+                
                 hostConnection.on('open', () => {
+                    clearTimeout(connTimeout); // Connesso con successo, rimuoviamo il timeout
                     enterGameUI();
                     updateTopStatus("online", "Connesso");
                     
@@ -506,6 +519,12 @@
                     log("L'Host ha chiuso la stanza!");
                     document.getElementById('partyListContainer').innerHTML = "<div style='color:red; text-align:center;'>La connessione con l'Host è caduta.</div>";
                 });
+
+                hostConnection.on('error', (err) => {
+                    clearTimeout(connTimeout);
+                    console.error("Connection Error:", err);
+                    showError("Errore di connessione diretta all'Host.");
+                });
             });
         }
 
@@ -518,16 +537,16 @@
             } else if (err.type === 'peer-unavailable') {
                 showError("Stanza non trovata. L'Host è offline o il codice è errato.");
             } else if (err.type === 'network' || err.type === 'server-error') {
-                showError("Errore di rete col server. Riprova.");
+                showError("Errore di rete col server P2P. Controlla la connessione e riprova.");
             } else {
-                showError("Errore di connessione: " + err.type);
+                showError("Errore imprevisto: " + err.type);
             }
         });
 
-        // Riconnessione automatica al server di segnalazione (se cade la rete)
+        // Riconnessione automatica al server di segnalazione (se cade la rete temporaneamente)
         peer.on('disconnected', () => {
             console.log("Disconnesso dal server PeerJS. Tentativo di riconnessione...");
-            peer.reconnect();
+            if(!peer.destroyed) peer.reconnect();
         });
     }
 
