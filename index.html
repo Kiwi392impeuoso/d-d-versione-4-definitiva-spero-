@@ -3,8 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Scheda RPG Cloud</title>
+    <title>Scheda RPG P2P</title>
     <link href="https://fonts.googleapis.com/css2?family=MedievalSharp&display=swap" rel="stylesheet">
+    <!-- Importazione PeerJS per la connessione P2P -->
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     
     <style>
         :root {
@@ -15,6 +17,7 @@
             --accent-gold: #c5a00bd7;
             --dark-border: #462c18;
             --input-bg: rgba(255,255,255,0.5);
+            --host-color: #8e44ad;
         }
 
         body {
@@ -29,7 +32,6 @@
             overflow-x: hidden;
         }
 
-        /* --- SFONDO STILIZZATO E SFOCATO --- */
         .bg-landscape {
             position: fixed;
             top: -5%; left: -5%; right: -5%; bottom: -5%;
@@ -48,7 +50,6 @@
             z-index: 1;
         }
 
-        /* --- STILE PERGAMENA --- */
         .paper-panel {
             background-color: var(--bg-paper);
             padding: 30px;
@@ -69,14 +70,11 @@
         }
 
         h1 { 
-            text-align: center; 
-            color: var(--text-color); 
+            text-align: center; color: var(--text-color); 
             border-bottom: 2px solid var(--text-color); 
-            margin-top: 0; 
-            padding-bottom: 10px;
+            margin-top: 0; padding-bottom: 10px;
         }
 
-        /* --- UI SETUP --- */
         label { display: block; margin-bottom: 5px; font-weight: bold; font-size: 1rem; }
 
         input {
@@ -88,41 +86,23 @@
         }
         input:focus { outline: none; border-color: var(--accent-red); background: rgba(255,255,255,0.8); }
 
-        /* Multiplayes Modes UI */
-        .room-toggle {
-            display: flex; gap: 10px; margin-bottom: 15px;
-        }
+        .room-toggle { display: flex; gap: 10px; margin-bottom: 15px; }
         .room-toggle button {
-            margin-top: 0; 
-            background-color: var(--input-bg); 
-            color: var(--text-color);
-            border: 2px solid var(--dark-border);
-            opacity: 0.7;
-            flex: 1;
+            margin-top: 0; background-color: var(--input-bg); color: var(--text-color);
+            border: 2px solid var(--dark-border); opacity: 0.7; flex: 1;
         }
         .room-toggle button.active {
-            background-color: var(--dark-border); 
-            color: #f4e4bc;
-            opacity: 1;
-            transform: scale(1.02);
+            background-color: var(--dark-border); color: #f4e4bc; opacity: 1; transform: scale(1.02);
         }
 
-        .room-input-container {
-            display: flex; gap: 5px; margin-bottom: 15px;
-        }
+        .room-input-container { display: flex; gap: 5px; margin-bottom: 15px; }
         .room-input-container input { margin-bottom: 0; text-align: center; letter-spacing: 2px; font-weight: bold; color: var(--accent-red); text-transform: uppercase;}
         .room-input-container button { width: auto; margin-top: 0; padding: 0 15px; font-size: 1.5rem; flex-shrink: 0;}
 
-        #joinError {
-            color: var(--accent-red);
-            text-align: center;
-            font-weight: bold;
-            margin-bottom: 15px;
-            display: none;
-            background: rgba(255,255,255,0.6);
-            padding: 8px;
-            border-radius: 4px;
-            border: 1px solid var(--accent-red);
+        #joinError, #p2pError {
+            color: var(--accent-red); text-align: center; font-weight: bold;
+            margin-bottom: 15px; display: none; background: rgba(255,255,255,0.6);
+            padding: 8px; border-radius: 4px; border: 1px solid var(--accent-red);
         }
 
         button {
@@ -137,7 +117,6 @@
         button:active { transform: scale(0.97); box-shadow: 0 2px 3px rgba(0,0,0,0.3); }
         button:hover { opacity: 0.9; }
 
-        /* --- STATUS BAR --- */
         .status-bar {
             position: absolute; top: -35px; right: 0;
             font-size: 0.8rem; display: flex; align-items: center; gap: 8px;
@@ -148,64 +127,24 @@
         .dot { width: 10px; height: 10px; border-radius: 50%; background: #ccc; transition: background 0.3s; }
         .dot.online { background: var(--accent-green); box-shadow: 0 0 8px var(--accent-green); }
         .dot.offline { background: #e74c3c; box-shadow: 0 0 8px #e74c3c; }
+        .dot.host { background: var(--host-color); box-shadow: 0 0 8px var(--host-color); }
 
-        /* --- ANIMAZIONI NOMI (FUOCO, RAGGI, FULMINI) --- */
-        .name-wrapper {
-            display: inline-block;
-            position: relative;
-        }
-
+        .name-wrapper { display: inline-block; position: relative; }
         .effect-flame .name-wrapper::before, .effect-flame .name-wrapper::after {
-            content: '🔥'; position: absolute; top: 50%;
-            animation: anim-flame 0.8s infinite alternate ease-in-out;
-            filter: drop-shadow(0 0 8px #e74c3c);
+            content: '🔥'; position: absolute; top: 50%; animation: anim-flame 0.8s infinite alternate ease-in-out; filter: drop-shadow(0 0 8px #e74c3c);
         }
         .effect-flame .name-wrapper::before { right: 100%; margin-right: 8px; transform: translateY(-50%); }
         .effect-flame .name-wrapper::after { left: 100%; margin-left: 8px; transform: translateY(-50%); }
-
-        .effect-ray .name-wrapper::before, .effect-ray .name-wrapper::after {
-            content: '✺'; position: absolute; top: 50%; color: #9b59b6;
-            animation: anim-ray 3s infinite linear;
-            text-shadow: 0 0 10px #8e44ad, 0 0 20px #8e44ad; font-family: sans-serif;
-        }
-        .effect-ray .name-wrapper::before { right: 100%; margin-right: 8px; margin-top: -12px;}
-        .effect-ray .name-wrapper::after { left: 100%; margin-left: 8px; margin-top: -12px; }
-
-        .effect-lightning .name-wrapper::before, .effect-lightning .name-wrapper::after {
-            content: '⚡'; position: absolute; top: 50%;
-            animation: anim-lightning 1.5s infinite;
-            filter: drop-shadow(0 0 5px #3498db);
-        }
-        .effect-lightning .name-wrapper::before { right: 100%; margin-right: 8px; transform: translateY(-50%); }
-        .effect-lightning .name-wrapper::after { left: 100%; margin-left: 8px; transform: translateY(-50%); }
-
+        
         @keyframes anim-flame {
             0% { transform: translateY(-40%) scale(0.9); opacity: 0.8; }
             100% { transform: translateY(-60%) scale(1.1); opacity: 1; }
         }
-        @keyframes anim-ray {
-            0% { transform: rotate(0deg) scale(0.9); }
-            50% { transform: rotate(180deg) scale(1.3); }
-            100% { transform: rotate(360deg) scale(0.9); }
-        }
-        @keyframes anim-lightning {
-            0%, 85% { opacity: 0.7; transform: translateY(-50%) scale(0.9); filter: drop-shadow(0 0 2px #3498db); }
-            87%, 93% { opacity: 1; transform: translateY(-50%) scale(1.3); filter: drop-shadow(0 0 15px #fff); }
-            89%, 95% { opacity: 0; }
-        }
 
-        /* --- GAME UI --- */
         .avatar { text-align: center; font-size: 1.2rem; margin-bottom: 20px; color: #555; font-style: italic; }
 
-        .stats-grid { 
-            display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; 
-            margin-bottom: 20px; text-align: center; 
-        }
-        .stat-box { 
-            border: 2px solid var(--text-color); padding: 10px; 
-            border-radius: 8px; background: rgba(255,255,255,0.4); 
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
+        .stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 20px; text-align: center; }
+        .stat-box { border: 2px solid var(--text-color); padding: 10px; border-radius: 8px; background: rgba(255,255,255,0.4); box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
         .stat-value { font-size: 1.6rem; font-weight: bold; }
         .stat-label { font-size: 0.75rem; text-transform: uppercase; font-weight: bold; }
 
@@ -216,7 +155,6 @@
         }
         .btn-small { width: auto; padding: 5px 15px; margin: 0; font-size: 1.2rem; }
 
-        /* HP Bar */
         .hp-container { margin-bottom: 20px; }
         .hp-header { display: flex; justify-content: space-between; margin-bottom: 5px; font-size: 1rem; font-weight: bold; }
         .hp-bar-bg {
@@ -229,12 +167,10 @@
             transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.4s;
         }
 
-        /* Controls */
         .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
         button.heal { background-color: #27ae60; color: white; border: 2px solid #1e8449; }
         button.damage { background-color: #c0392b; color: white; border: 2px solid #922b21; }
 
-        /* Party List */
         .party-list { margin-top: 25px; border-top: 2px dashed var(--dark-border); padding-top: 15px; }
         .party-title { text-align: center; font-size: 1rem; font-weight: bold; opacity: 0.8; margin-bottom: 15px; text-transform: uppercase; }
         .party-member { 
@@ -244,15 +180,9 @@
             border-radius: 6px; margin-bottom: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);
         }
         
-        .party-member-name { text-align: center; width: 100%; padding-left: 20px;}
+        .party-member-name { display:flex; flex-direction: column; width: 100%; }
         .party-member-stats { text-align: right; min-width: 60px; }
 
-        .config-warning {
-            background: #f1c40f; color: #4a3b10; padding: 10px;
-            font-size: 0.9rem; text-align: center; border: 2px solid #d35400;
-            margin-bottom: 15px; display: none; border-radius: 4px; font-family: sans-serif;
-        }
-        
         #logMsg { 
             text-align: center; font-size: 1rem; margin-top: 15px; 
             opacity: 0.7; font-style: italic; min-height: 1.2em;
@@ -260,43 +190,41 @@
         }
 
         .room-badge {
-            text-align:center; font-size:0.85rem; margin-bottom:15px; 
+            text-align:center; font-size:0.85rem; margin-bottom:5px; 
             opacity:0.9; letter-spacing:2px; font-weight: bold;
             background: rgba(0,0,0,0.15); padding: 8px; border-radius: 6px;
             border: 1px solid rgba(0,0,0,0.2);
+        }
+        
+        .role-badge {
+            text-align:center; font-size:0.75rem; margin-bottom:15px; 
+            font-weight: bold; color: var(--host-color);
         }
 
     </style>
 </head>
 <body>
 
-<!-- Livello Sfondo -->
 <div class="bg-landscape"></div>
 
 <div class="app-container">
     
-    <!-- STATUS INDICATOR -->
     <div class="status-bar">
-        <div id="statusDot" class="dot"></div>
-        <span id="statusText">Inizializzazione...</span>
+        <div id="statusDot" class="dot offline"></div>
+        <span id="statusText">In attesa...</span>
     </div>
 
     <!-- PANNELLO SETUP -->
     <div id="setupPanel" class="paper-panel active">
         <h1>Nuovo Eroe</h1>
         
-        <div id="configWarning" class="config-warning">
-            <strong>MODALITÀ OFFLINE</strong><br>
-            Nessun cloud rilevato. Gioco in locale.
-        </div>
-
         <label>Nome Eroe</label>
         <input type="text" id="inputName" value="Valeros" placeholder="Es. Gandalf">
         
         <label>Classe & Razza</label>
         <input type="text" id="inputClass" value="Guerriero Umano" placeholder="Es. Elfo Mago">
         
-        <label>Modalità Multiplayer</label>
+        <label>Modalità Multiplayer (P2P)</label>
         <div class="room-toggle">
             <button id="btnCreateMode" class="active" onclick="toggleRoomMode('create')">Crea Nuova</button>
             <button id="btnJoinMode" onclick="toggleRoomMode('join')">Unisciti</button>
@@ -308,6 +236,7 @@
                 <input type="text" id="inputRoomCreate" readonly>
                 <button onclick="generateRoomCodeUI()" title="Genera nuovo codice">🎲</button>
             </div>
+            <small style="display:block; text-align:center; opacity:0.7; margin-top:-10px; margin-bottom:15px;">Diventerai l'Host. Non chiudere la pagina!</small>
         </div>
 
         <div id="joinRoomUI" style="display: none;">
@@ -315,7 +244,8 @@
             <input type="text" id="inputRoomJoin" placeholder="Es. A1B2C" style="text-transform: uppercase; text-align: center; font-weight: bold; letter-spacing: 2px; color: var(--accent-red);">
         </div>
 
-        <div id="joinError">Inserisci un codice stanza valido per unirti!</div>
+        <div id="joinError">Inserisci un codice stanza valido!</div>
+        <div id="p2pError"></div>
 
         <button onclick="startGame()">Entra nell'Avventura</button>
     </div>
@@ -324,9 +254,9 @@
     <div id="gamePanel" class="paper-panel">
         
         <div class="room-badge" id="roomDisplay">STANZA: ???</div>
+        <div class="role-badge" id="roleDisplay"></div>
 
-        <!-- Nome con contenitore per l'animazione -->
-        <h1 style="border:none; margin-bottom: 0;" id="charEffectContainer">
+        <h1 style="border:none; margin-bottom: 0;" class="effect-flame">
             <span class="name-wrapper" id="charNameDisplay">Nome Personaggio</span>
         </h1>
         <div class="avatar" id="charClassDisplay">Classe Razza</div>
@@ -371,123 +301,33 @@
         
         <p id="logMsg">Benvenuto nel regno.</p>
 
-        <!-- Sezione Multiplayer (Cloud) -->
         <div class="party-list">
-            <div class="party-title">Compagni nella Stanza</div>
+            <div class="party-title">Compagni (P2P)</div>
             <div id="partyListContainer">
                 <div style="text-align:center; opacity:0.5; font-size:0.9rem; margin-top:10px;">Nessuno qui...</div>
             </div>
         </div>
 
-        <button onclick="location.reload()" style="background:transparent; color:#5d4037; border:2px solid #5d4037; margin-top:30px; font-size:0.9rem; box-shadow: none;">Esci dalla partita</button>
+        <button onclick="location.reload()" style="background:transparent; color:#5d4037; border:2px solid #5d4037; margin-top:30px; font-size:0.9rem; box-shadow: none;">Disconnettiti ed Esci</button>
     </div>
 
 </div>
 
-<script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-    import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-    import { getFirestore, doc, setDoc, onSnapshot, collection } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-
-    // --- VARIABILI GLOBALI ---
-    let app, auth, db;
-    let isOnline = false;
-    let currentUser = null;
-    let myDocRef = null;
-    let unsubscribeParty = null;
-    let fallbackUid = "local_" + Math.floor(Math.random() * 100000);
-    let roomMode = 'create'; // 'create' o 'join'
+<script>
+    // --- VARIABILI GLOBALI P2P ---
+    const P2P_PREFIX = "rpg-p2p-room-"; // Prefisso per evitare collisioni su rete globale
+    let roomMode = 'create'; 
+    let myUid = crypto.randomUUID(); // ID univoco per questo giocatore
     
-    // Configurazione iniettata dall'ambiente
-    let activeConfig = null;
-    let appIdStr = 'default-app-id';
+    // Variabili PeerJS
+    let peer = null;
+    let isHost = false;
+    let hostConnection = null; // Usato se sono Client
+    let clientConnections = []; // Usato se sono Host
+    
+    // Stato condiviso
+    let partyMembers = {}; // Mappa { uid: characterData }
 
-    if (typeof __firebase_config !== 'undefined') {
-        try {
-            activeConfig = JSON.parse(__firebase_config);
-            if (typeof __app_id !== 'undefined') appIdStr = __app_id;
-        } catch (e) { console.error("Errore parsing configurazione Firebase", e); }
-    }
-
-    // --- GESTIONE MODALITÀ STANZA ---
-    window.toggleRoomMode = function(mode) {
-        roomMode = mode;
-        document.getElementById('joinError').style.display = 'none'; 
-        
-        if (mode === 'create') {
-            document.getElementById('btnCreateMode').classList.add('active');
-            document.getElementById('btnJoinMode').classList.remove('active');
-            document.getElementById('createRoomUI').style.display = 'block';
-            document.getElementById('joinRoomUI').style.display = 'none';
-        } else {
-            document.getElementById('btnCreateMode').classList.remove('active');
-            document.getElementById('btnJoinMode').classList.add('active');
-            document.getElementById('createRoomUI').style.display = 'none';
-            document.getElementById('joinRoomUI').style.display = 'block';
-            document.getElementById('inputRoomJoin').focus();
-        }
-    };
-
-    function generateRandomCode() {
-        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-        let code = '';
-        for (let i = 0; i < 5; i++) code += chars.charAt(Math.floor(Math.random() * chars.length));
-        return code;
-    }
-
-    window.generateRoomCodeUI = function() {
-        document.getElementById('inputRoomCreate').value = generateRandomCode();
-    };
-
-    document.addEventListener("DOMContentLoaded", () => {
-        document.getElementById('inputRoomCreate').value = generateRandomCode();
-    });
-
-    // --- INIZIALIZZAZIONE FIREBASE ---
-    if (activeConfig) {
-        try {
-            app = initializeApp(activeConfig);
-            auth = getAuth(app);
-            db = getFirestore(app);
-            isOnline = true;
-            
-            const initAuth = async () => {
-                try {
-                    if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                        await signInWithCustomToken(auth, __initial_auth_token);
-                    } else {
-                        await signInAnonymously(auth);
-                    }
-                } catch(err) {
-                    console.error("Auth Error:", err);
-                    updateStatus(false, "Errore Auth");
-                }
-            };
-            
-            initAuth();
-            
-            onAuthStateChanged(auth, user => {
-                if(user) {
-                    currentUser = user;
-                    updateStatus(true, "Cloud Attivo");
-                    if (document.getElementById('gamePanel').classList.contains('active')) {
-                        joinRoom(charData.room);
-                    }
-                } else {
-                    updateStatus(false, "Disconnesso");
-                }
-            });
-        } catch (e) {
-            console.error("Firebase init failed:", e);
-            updateStatus(false, "Errore Inizializzazione");
-            document.getElementById('configWarning').style.display = 'block';
-        }
-    } else {
-        document.getElementById('configWarning').style.display = 'block';
-        updateStatus(false, "Offline");
-    }
-
-    // --- STATO DEL PERSONAGGIO ---
     let charData = {
         name: "Valeros",
         class: "Guerriero",
@@ -499,84 +339,202 @@
         baseDmg: 10,
         baseAc: 10
     };
-
+    
     let logTimeout;
 
-    // --- FUNZIONE ASSEGNAZIONE EFFETTI ---
-    function getEffectClass(uid) {
-        let sum = 0;
-        for(let i=0; i<uid.length; i++) sum += uid.charCodeAt(i);
-        const effects = ['effect-flame', 'effect-ray', 'effect-lightning'];
-        return effects[sum % effects.length];
+    // --- SETUP UI ---
+    function toggleRoomMode(mode) {
+        roomMode = mode;
+        document.getElementById('joinError').style.display = 'none'; 
+        document.getElementById('p2pError').style.display = 'none';
+        
+        if (mode === 'create') {
+            document.getElementById('btnCreateMode').classList.add('active');
+            document.getElementById('btnJoinMode').classList.remove('active');
+            document.getElementById('createRoomUI').style.display = 'block';
+            document.getElementById('joinRoomUI').style.display = 'none';
+        } else {
+            document.getElementById('btnCreateMode').classList.remove('active');
+            document.getElementById('btnJoinMode').classList.add('active');
+            document.getElementById('createRoomUI').style.display = 'none';
+            document.getElementById('joinRoomUI').style.display = 'block';
+        }
     }
 
-    function getMyUid() {
-        return currentUser ? currentUser.uid : fallbackUid;
+    function generateRandomCode() {
+        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+        let code = '';
+        for (let i = 0; i < 5; i++) code += chars.charAt(Math.floor(Math.random() * chars.length));
+        return code;
     }
 
-    // --- UI FUNCTIONS ---
-    window.startGame = function() {
-        // Validazione preventiva per l'unione in stanza
-        if (roomMode === 'join') {
-            let joinVal = document.getElementById('inputRoomJoin').value.trim();
-            if (!joinVal || joinVal.length < 2) {
-                document.getElementById('joinError').style.display = 'block';
-                return; // Ferma l'avvio se il codice è assente o troppo corto
-            }
-        }
-        document.getElementById('joinError').style.display = 'none';
+    function generateRoomCodeUI() {
+        document.getElementById('inputRoomCreate').value = generateRandomCode();
+    }
 
-        if (isOnline && !currentUser) {
-            log("Connessione al Cloud in corso...");
-            setTimeout(() => {
-                if(!currentUser) {
-                    log("Avvio in locale...");
-                    proceedStart();
-                } else {
-                    proceedStart();
-                }
-            }, 1000);
-            return;
-        }
-        proceedStart();
-    };
+    document.addEventListener("DOMContentLoaded", () => {
+        generateRoomCodeUI();
+    });
 
-    function proceedStart() {
-        // Preleva dati dal setup
+    // --- AVVIO CONNESSIONE P2P ---
+    function startGame() {
         charData.name = document.getElementById('inputName').value.trim() || "Eroe Senza Nome";
         charData.class = document.getElementById('inputClass').value.trim() || "Avventuriero";
         
-        let roomVal = "";
+        let roomCode = "";
         if (roomMode === 'create') {
-            roomVal = document.getElementById('inputRoomCreate').value.trim();
-            if(!roomVal) roomVal = generateRandomCode(); 
+            roomCode = document.getElementById('inputRoomCreate').value.trim();
         } else {
-            roomVal = document.getElementById('inputRoomJoin').value.trim();
+            roomCode = document.getElementById('inputRoomJoin').value.trim().toUpperCase();
+            if (!roomCode || roomCode.length < 2) {
+                document.getElementById('joinError').style.display = 'block';
+                return;
+            }
         }
-        charData.room = roomVal.toUpperCase();
+        charData.room = roomCode;
 
-        // Switch pannelli
-        document.getElementById('setupPanel').classList.remove('active');
-        document.getElementById('gamePanel').classList.add('active');
+        initP2P();
+    }
+
+    function initP2P() {
+        updateStatus("wait", "Connessione...");
         
-        // Imposta UI statica e Animazioni Base
-        document.getElementById('charNameDisplay').innerText = charData.name;
-        document.getElementById('charClassDisplay').innerText = charData.class;
-        document.getElementById('roomDisplay').innerText = "📍 STANZA: " + charData.room;
+        if (roomMode === 'create') {
+            isHost = true;
+            // Creo l'host con un ID specifico basato sulla stanza
+            peer = new Peer(P2P_PREFIX + charData.room);
+            
+            peer.on('open', (id) => {
+                enterGameUI();
+                updateStatus("host", "Host P2P Attivo");
+                partyMembers[myUid] = charData; // Aggiungo me stesso al party
+                broadcastParty();
+            });
 
-        // Applica animazione personale
-        const myEffect = getEffectClass(getMyUid());
-        document.getElementById('charEffectContainer').className = myEffect;
+            // L'Host riceve le connessioni dai client
+            peer.on('connection', (conn) => {
+                clientConnections.push(conn);
+                let clientUid = null; // Sarà impostato dal primo messaggio
+                
+                conn.on('data', (data) => {
+                    if (data.type === 'update') {
+                        clientUid = data.uid;
+                        partyMembers[clientUid] = data.charData; // Aggiorno stato in memoria dell'Host
+                        broadcastParty(); // Invia il party aggiornato a TUTTI
+                        renderParty(); // Aggiorna l'UI dell'Host
+                    }
+                });
 
-        render();
+                conn.on('close', () => {
+                    if(clientUid && partyMembers[clientUid]) {
+                        delete partyMembers[clientUid]; // Rimuovi il giocatore
+                        broadcastParty(); // Avvisa gli altri
+                        renderParty();
+                    }
+                    clientConnections = clientConnections.filter(c => c !== conn);
+                });
+            });
 
-        if (isOnline && currentUser) {
-            joinRoom(charData.room);
+            peer.on('error', (err) => {
+                showError("Errore Host: Il codice stanza potrebbe essere già in uso.");
+                console.error(err);
+            });
+
+        } else {
+            // Sono un CLIENT
+            isHost = false;
+            peer = new Peer(); // ID casuale per il client
+            
+            peer.on('open', (id) => {
+                // Mi connetto all'ID dell'Host
+                hostConnection = peer.connect(P2P_PREFIX + charData.room);
+                
+                hostConnection.on('open', () => {
+                    enterGameUI();
+                    updateStatus("online", "Connesso all'Host");
+                    sync(); // Invia subito i miei dati all'host
+                });
+
+                // Ricevo gli aggiornamenti globali dall'Host
+                hostConnection.on('data', (data) => {
+                    if (data.type === 'party_update') {
+                        partyMembers = data.party;
+                        renderParty();
+                    }
+                });
+
+                hostConnection.on('close', () => {
+                    updateStatus("offline", "Host Disconnesso");
+                    log("La connessione con l'Host è caduta!");
+                });
+            });
+
+            peer.on('error', (err) => {
+                showError("Impossibile connettersi. L'Host è attivo?");
+                console.error(err);
+            });
         }
     }
 
-    // --- LOGICA DI GIOCO ---
-    window.changeLevel = function(delta) {
+    function showError(msg) {
+        updateStatus("offline", "Errore");
+        const errEl = document.getElementById('p2pError');
+        errEl.innerText = msg;
+        errEl.style.display = 'block';
+    }
+
+    function enterGameUI() {
+        document.getElementById('setupPanel').classList.remove('active');
+        document.getElementById('gamePanel').classList.add('active');
+        
+        document.getElementById('charNameDisplay').innerText = charData.name;
+        document.getElementById('charClassDisplay').innerText = charData.class;
+        document.getElementById('roomDisplay').innerText = "📍 STANZA: " + charData.room;
+        
+        const roleEl = document.getElementById('roleDisplay');
+        if (isHost) {
+            roleEl.innerText = "👑 Sei l'Host della Stanza";
+            roleEl.style.color = "var(--host-color)";
+        } else {
+            roleEl.innerText = "🔗 Connesso alla Stanza";
+            roleEl.style.color = "var(--accent-green)";
+        }
+
+        render();
+    }
+
+    // --- SINCRONIZZAZIONE DATI ---
+    function sync() {
+        if (isHost) {
+            partyMembers[myUid] = charData;
+            broadcastParty();
+            renderParty();
+        } else {
+            if (hostConnection && hostConnection.open) {
+                hostConnection.send({
+                    type: 'update',
+                    uid: myUid,
+                    charData: charData
+                });
+            }
+        }
+    }
+
+    // Usata solo dall'Host per inviare i dati a tutti
+    function broadcastParty() {
+        if (!isHost) return;
+        clientConnections.forEach(conn => {
+            if (conn.open) {
+                conn.send({
+                    type: 'party_update',
+                    party: partyMembers
+                });
+            }
+        });
+    }
+
+    // --- LOGICA DI GIOCO INTERNA ---
+    function changeLevel(delta) {
         const oldLvl = charData.level;
         charData.level += delta;
         if(charData.level < 1) charData.level = 1;
@@ -593,10 +551,10 @@
             log("Livello perso...");
         }
         render();
-        sync();
+        sync(); // Notifica P2P
     }
 
-    window.updateHP = function(delta) {
+    function updateHP(delta) {
         charData.currentHp += delta;
         if(charData.currentHp > charData.maxHp) charData.currentHp = charData.maxHp;
         if(charData.currentHp < 0) charData.currentHp = 0;
@@ -605,7 +563,7 @@
         else if (delta > 0) log(`Ti sei curato di ${delta} HP.`);
 
         render();
-        sync();
+        sync(); // Notifica P2P
     }
 
     function log(msg) {
@@ -640,77 +598,47 @@
         else bar.style.backgroundColor = "#27ae60"; 
     }
 
-    // --- FIREBASE SYNC ---
-    async function joinRoom(room) {
-        if(!isOnline || !currentUser) return;
-
-        const collectionPath = collection(db, 'artifacts', appIdStr, 'public', 'data', 'rpg_players');
-        const docId = currentUser.uid;
-        myDocRef = doc(db, 'artifacts', appIdStr, 'public', 'data', 'rpg_players', docId);
+    // Disegna la lista dei compagni di squadra (escludendo se stessi)
+    function renderParty() {
+        const list = document.getElementById('partyListContainer');
+        list.innerHTML = "";
+        let count = 0;
         
-        await sync();
+        Object.keys(partyMembers).forEach(uid => {
+            if (uid === myUid) return; // Salta te stesso
 
-        if (unsubscribeParty) unsubscribeParty();
-
-        unsubscribeParty = onSnapshot(collectionPath, (snapshot) => {
-            const list = document.getElementById('partyListContainer');
-            list.innerHTML = "";
-            let count = 0;
+            const p = partyMembers[uid];
+            const pDiv = document.createElement('div');
+            pDiv.className = `party-member`;
             
-            snapshot.forEach(d => {
-                const p = d.data();
-                if(p.room === room && d.id !== docId) { 
-                    const pDiv = document.createElement('div');
-                    const memberEffect = getEffectClass(p.uid || d.id);
-                    pDiv.className = `party-member ${memberEffect}`;
-                    
-                    const hpPct = (p.currentHp / p.maxHp);
-                    const hpColor = hpPct < 0.3 ? '#c0392b' : (hpPct < 0.6 ? '#d35400' : '#27ae60');
+            const hpPct = (p.currentHp / p.maxHp);
+            const hpColor = hpPct < 0.3 ? '#c0392b' : (hpPct < 0.6 ? '#d35400' : '#27ae60');
 
-                    pDiv.innerHTML = `
-                        <div class="party-member-name">
-                            <span class="name-wrapper"><strong>${p.name}</strong></span> <span style="font-size:0.8rem; opacity:0.8;">(Lvl ${p.level})</span>
-                        </div>
-                        <div class="party-member-stats" style="color:${hpColor}; font-weight:bold; background: rgba(0,0,0,0.6); padding: 4px 10px; border-radius: 12px; margin-left: 10px;">
-                            ${p.currentHp}/${p.maxHp}
-                        </div>`;
-                    list.appendChild(pDiv);
-                    count++;
-                }
-            });
-            if(count === 0) list.innerHTML = "<div style='text-align:center; opacity:0.5; font-size:0.9rem; margin-top:10px;'>Nessun alleato in vista...</div>";
-        }, (err) => {
-            console.error("Errore Sync Party:", err);
+            pDiv.innerHTML = `
+                <div class="party-member-name">
+                    <span><strong>${p.name}</strong> <span style="font-size:0.8rem; opacity:0.8;">(Lvl ${p.level})</span></span>
+                    <span style="font-size:0.75rem; opacity:0.7;">${p.class}</span>
+                </div>
+                <div class="party-member-stats" style="color:${hpColor}; font-weight:bold; background: rgba(0,0,0,0.6); padding: 4px 10px; border-radius: 12px; margin-left: 10px;">
+                    ${p.currentHp}/${p.maxHp}
+                </div>`;
+            list.appendChild(pDiv);
+            count++;
         });
+
+        if(count === 0) list.innerHTML = "<div style='text-align:center; opacity:0.5; font-size:0.9rem; margin-top:10px;'>In attesa di altri giocatori...</div>";
     }
 
-    async function sync() {
-        if(!isOnline || !myDocRef) return;
-        try {
-            await setDoc(myDocRef, {
-                uid: currentUser.uid,
-                room: charData.room,
-                name: charData.name,
-                class: charData.class,
-                level: charData.level,
-                currentHp: charData.currentHp,
-                maxHp: charData.maxHp,
-                str: charData.str,
-                lastUpdate: Date.now()
-            }, { merge: true });
-        } catch(e) { console.error("Sync error", e); }
-    }
-
-    function updateStatus(online, msg) {
+    function updateStatus(state, msg) {
         const dot = document.getElementById('statusDot');
         const txt = document.getElementById('statusText');
-        if(online) {
-            dot.className = "dot online";
-            txt.innerText = msg || "Online";
-        } else {
-            dot.className = "dot offline";
-            txt.innerText = msg || "Offline";
-        }
+        dot.className = "dot"; // reset
+        
+        if (state === "host") dot.classList.add("host");
+        else if (state === "online") dot.classList.add("online");
+        else if (state === "offline") dot.classList.add("offline");
+        
+        txt.innerText = msg;
     }
 </script>
 </body>
