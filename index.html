@@ -8,7 +8,7 @@
     
     <style>
         :root {
-            --bg-paper: rgba(244, 228, 188, 0.92); /* Leggermente traslucido per mostrare lo sfondo */
+            --bg-paper: rgba(244, 228, 188, 0.92);
             --text-color: #2c1a0b;
             --accent-red: #8a1c1c;
             --accent-green: #27ae60;
@@ -58,7 +58,7 @@
             position: relative;
             margin-bottom: 20px;
             display: none;
-            backdrop-filter: blur(4px); /* Aggiunge un tocco di sfocatura interna */
+            backdrop-filter: blur(4px);
             animation: fadeIn 0.4s ease-out;
         }
         .paper-panel.active { display: block; }
@@ -88,11 +88,42 @@
         }
         input:focus { outline: none; border-color: var(--accent-red); background: rgba(255,255,255,0.8); }
 
+        /* Multiplayes Modes UI */
+        .room-toggle {
+            display: flex; gap: 10px; margin-bottom: 15px;
+        }
+        .room-toggle button {
+            margin-top: 0; 
+            background-color: var(--input-bg); 
+            color: var(--text-color);
+            border: 2px solid var(--dark-border);
+            opacity: 0.7;
+            flex: 1;
+        }
+        .room-toggle button.active {
+            background-color: var(--dark-border); 
+            color: #f4e4bc;
+            opacity: 1;
+            transform: scale(1.02);
+        }
+
         .room-input-container {
             display: flex; gap: 5px; margin-bottom: 15px;
         }
         .room-input-container input { margin-bottom: 0; text-align: center; letter-spacing: 2px; font-weight: bold; color: var(--accent-red); text-transform: uppercase;}
-        .room-input-container button { width: auto; margin-top: 0; padding: 0 15px; font-size: 1.5rem; }
+        .room-input-container button { width: auto; margin-top: 0; padding: 0 15px; font-size: 1.5rem; flex-shrink: 0;}
+
+        #joinError {
+            color: var(--accent-red);
+            text-align: center;
+            font-weight: bold;
+            margin-bottom: 15px;
+            display: none;
+            background: rgba(255,255,255,0.6);
+            padding: 8px;
+            border-radius: 4px;
+            border: 1px solid var(--accent-red);
+        }
 
         button {
             background-color: var(--text-color); color: #f4e4bc;
@@ -124,7 +155,6 @@
             position: relative;
         }
 
-        /* Effetto 1: Fuoco */
         .effect-flame .name-wrapper::before, .effect-flame .name-wrapper::after {
             content: '🔥'; position: absolute; top: 50%;
             animation: anim-flame 0.8s infinite alternate ease-in-out;
@@ -133,7 +163,6 @@
         .effect-flame .name-wrapper::before { right: 100%; margin-right: 8px; transform: translateY(-50%); }
         .effect-flame .name-wrapper::after { left: 100%; margin-left: 8px; transform: translateY(-50%); }
 
-        /* Effetto 2: Raggi Viola */
         .effect-ray .name-wrapper::before, .effect-ray .name-wrapper::after {
             content: '✺'; position: absolute; top: 50%; color: #9b59b6;
             animation: anim-ray 3s infinite linear;
@@ -142,7 +171,6 @@
         .effect-ray .name-wrapper::before { right: 100%; margin-right: 8px; margin-top: -12px;}
         .effect-ray .name-wrapper::after { left: 100%; margin-left: 8px; margin-top: -12px; }
 
-        /* Effetto 3: Fulmini */
         .effect-lightning .name-wrapper::before, .effect-lightning .name-wrapper::after {
             content: '⚡'; position: absolute; top: 50%;
             animation: anim-lightning 1.5s infinite;
@@ -216,7 +244,6 @@
             border-radius: 6px; margin-bottom: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);
         }
         
-        /* Modifica specifica per i nomi della party list */
         .party-member-name { text-align: center; width: 100%; padding-left: 20px;}
         .party-member-stats { text-align: right; min-width: 60px; }
 
@@ -269,11 +296,26 @@
         <label>Classe & Razza</label>
         <input type="text" id="inputClass" value="Guerriero Umano" placeholder="Es. Elfo Mago">
         
-        <label>Codice Stanza (Multiplayer)</label>
-        <div class="room-input-container">
-            <input type="text" id="inputRoom" placeholder="Es. TAVERNA">
-            <button onclick="generateRoomCodeUI()" title="Genera nuovo codice">🎲</button>
+        <label>Modalità Multiplayer</label>
+        <div class="room-toggle">
+            <button id="btnCreateMode" class="active" onclick="toggleRoomMode('create')">Crea Nuova</button>
+            <button id="btnJoinMode" onclick="toggleRoomMode('join')">Unisciti</button>
         </div>
+
+        <div id="createRoomUI">
+            <label>Il tuo Codice Stanza</label>
+            <div class="room-input-container">
+                <input type="text" id="inputRoomCreate" readonly>
+                <button onclick="generateRoomCodeUI()" title="Genera nuovo codice">🎲</button>
+            </div>
+        </div>
+
+        <div id="joinRoomUI" style="display: none;">
+            <label>Codice Stanza Esistente</label>
+            <input type="text" id="inputRoomJoin" placeholder="Es. A1B2C" style="text-transform: uppercase; text-align: center; font-weight: bold; letter-spacing: 2px; color: var(--accent-red);">
+        </div>
+
+        <div id="joinError">Inserisci un codice stanza valido per unirti!</div>
 
         <button onclick="startGame()">Entra nell'Avventura</button>
     </div>
@@ -354,8 +396,9 @@
     let myDocRef = null;
     let unsubscribeParty = null;
     let fallbackUid = "local_" + Math.floor(Math.random() * 100000);
+    let roomMode = 'create'; // 'create' o 'join'
     
-    // Configurazione iniettata dall'ambiente (se presente)
+    // Configurazione iniettata dall'ambiente
     let activeConfig = null;
     let appIdStr = 'default-app-id';
 
@@ -366,7 +409,25 @@
         } catch (e) { console.error("Errore parsing configurazione Firebase", e); }
     }
 
-    // --- GENERAZIONE CODICE STANZA AUTOMATICO ---
+    // --- GESTIONE MODALITÀ STANZA ---
+    window.toggleRoomMode = function(mode) {
+        roomMode = mode;
+        document.getElementById('joinError').style.display = 'none'; 
+        
+        if (mode === 'create') {
+            document.getElementById('btnCreateMode').classList.add('active');
+            document.getElementById('btnJoinMode').classList.remove('active');
+            document.getElementById('createRoomUI').style.display = 'block';
+            document.getElementById('joinRoomUI').style.display = 'none';
+        } else {
+            document.getElementById('btnCreateMode').classList.remove('active');
+            document.getElementById('btnJoinMode').classList.add('active');
+            document.getElementById('createRoomUI').style.display = 'none';
+            document.getElementById('joinRoomUI').style.display = 'block';
+            document.getElementById('inputRoomJoin').focus();
+        }
+    };
+
     function generateRandomCode() {
         const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
         let code = '';
@@ -375,12 +436,11 @@
     }
 
     window.generateRoomCodeUI = function() {
-        document.getElementById('inputRoom').value = generateRandomCode();
+        document.getElementById('inputRoomCreate').value = generateRandomCode();
     };
 
-    // Pre-compila la stanza al caricamento
     document.addEventListener("DOMContentLoaded", () => {
-        document.getElementById('inputRoom').value = generateRandomCode();
+        document.getElementById('inputRoomCreate').value = generateRandomCode();
     });
 
     // --- INIZIALIZZAZIONE FIREBASE ---
@@ -442,7 +502,7 @@
 
     let logTimeout;
 
-    // --- FUNZIONE ASSEGNAZIONE EFFETTI (Basata su UID) ---
+    // --- FUNZIONE ASSEGNAZIONE EFFETTI ---
     function getEffectClass(uid) {
         let sum = 0;
         for(let i=0; i<uid.length; i++) sum += uid.charCodeAt(i);
@@ -456,6 +516,16 @@
 
     // --- UI FUNCTIONS ---
     window.startGame = function() {
+        // Validazione preventiva per l'unione in stanza
+        if (roomMode === 'join') {
+            let joinVal = document.getElementById('inputRoomJoin').value.trim();
+            if (!joinVal || joinVal.length < 2) {
+                document.getElementById('joinError').style.display = 'block';
+                return; // Ferma l'avvio se il codice è assente o troppo corto
+            }
+        }
+        document.getElementById('joinError').style.display = 'none';
+
         if (isOnline && !currentUser) {
             log("Connessione al Cloud in corso...");
             setTimeout(() => {
@@ -475,8 +545,14 @@
         // Preleva dati dal setup
         charData.name = document.getElementById('inputName').value.trim() || "Eroe Senza Nome";
         charData.class = document.getElementById('inputClass').value.trim() || "Avventuriero";
-        let roomVal = document.getElementById('inputRoom').value.trim();
-        if(!roomVal) roomVal = generateRandomCode(); // Sicurezza se utente cancella tutto
+        
+        let roomVal = "";
+        if (roomMode === 'create') {
+            roomVal = document.getElementById('inputRoomCreate').value.trim();
+            if(!roomVal) roomVal = generateRandomCode(); 
+        } else {
+            roomVal = document.getElementById('inputRoomJoin').value.trim();
+        }
         charData.room = roomVal.toUpperCase();
 
         // Switch pannelli
@@ -541,12 +617,10 @@
     }
 
     function render() {
-        // Calcolo stats derivate
         let strMod = Math.floor((charData.str - 10) / 2);
         let dmg = charData.baseDmg + strMod + Math.floor(charData.level / 2);
         let ac = charData.baseAc + Math.floor(charData.level / 2);
 
-        // Update DOM testuale
         document.getElementById('dispLvl').innerText = charData.level;
         document.getElementById('dispStr').innerText = charData.str;
         document.getElementById('dispDmg').innerText = dmg;
@@ -555,16 +629,15 @@
         document.getElementById('dispHp').innerText = charData.currentHp;
         document.getElementById('dispMaxHp').innerText = charData.maxHp;
 
-        // Barra HP
         let pct = (charData.currentHp / charData.maxHp) * 100;
         pct = Math.max(0, Math.min(100, pct)); 
         
         const bar = document.getElementById('hpBar');
         bar.style.width = pct + "%";
         
-        if(pct <= 25) bar.style.backgroundColor = "#c0392b"; // Rosso critico
-        else if (pct <= 50) bar.style.backgroundColor = "#d35400"; // Arancione
-        else bar.style.backgroundColor = "#27ae60"; // Verde sano
+        if(pct <= 25) bar.style.backgroundColor = "#c0392b"; 
+        else if (pct <= 50) bar.style.backgroundColor = "#d35400"; 
+        else bar.style.backgroundColor = "#27ae60"; 
     }
 
     // --- FIREBASE SYNC ---
@@ -579,7 +652,6 @@
 
         if (unsubscribeParty) unsubscribeParty();
 
-        // Ascolto e rendering del gruppo
         unsubscribeParty = onSnapshot(collectionPath, (snapshot) => {
             const list = document.getElementById('partyListContainer');
             list.innerHTML = "";
