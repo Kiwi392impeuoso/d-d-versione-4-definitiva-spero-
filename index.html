@@ -245,7 +245,7 @@
 
         <div id="joinRoomUI" style="display: none;">
             <label>Codice Stanza Esistente</label>
-            <input type="text" id="inputRoomJoin" placeholder="Es. A1B2C" style="text-transform: uppercase; text-align: center; font-weight: bold; letter-spacing: 2px; color: var(--accent-red);">
+            <input type="text" id="inputRoomJoin" placeholder="Es. PASSWORD" style="text-transform: uppercase; text-align: center; font-weight: bold; letter-spacing: 2px; color: var(--accent-red);">
         </div>
 
         <div id="statusMsg">Connessione in corso...</div>
@@ -492,7 +492,7 @@
                         showError("Tempo scaduto. Controlla che il codice sia esatto e che l'Host sia già dentro la stanza.");
                         if(peer) peer.destroy();
                     }
-                }, 8000); // 8 secondi di attesa
+                }, 20000); // 20 secondi di attesa
                 
                 hostConnection.on('open', () => {
                     clearTimeout(connTimeout); // Connesso con successo, rimuoviamo il timeout
